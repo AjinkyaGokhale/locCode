@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LocCode Memory Viewer</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; background: #0d1117; color: #c9d1d9; min-height: 100vh; }
+    header { background: #161b22; border-bottom: 1px solid #30363d; padding: 12px 24px; display: flex; align-items: center; gap: 16px; }
+    header h1 { font-size: 18px; font-weight: 600; color: #58a6ff; }
+    .stats { font-size: 12px; color: #8b949e; margin-left: auto; }
+    .main { display: grid; grid-template-columns: 200px 1fr; height: calc(100vh - 49px); }
+    .sidebar { background: #161b22; border-right: 1px solid #30363d; padding: 12px 0; }
+    .sidebar-tab { padding: 8px 16px; cursor: pointer; font-size: 14px; color: #8b949e; border-left: 3px solid transparent; }
+    .sidebar-tab:hover { color: #c9d1d9; background: #1f2937; }
+    .sidebar-tab.active { color: #58a6ff; border-left-color: #58a6ff; background: #1f2937; }
+    .content { padding: 16px; overflow-y: auto; }
+    .search-bar { display: flex; gap: 8px; margin-bottom: 16px; }
+    .search-bar input { flex: 1; background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 8px 12px; color: #c9d1d9; font-size: 14px; outline: none; }
+    .search-bar input:focus { border-color: #58a6ff; }
+    .search-bar button { background: #238636; border: none; border-radius: 6px; padding: 8px 16px; color: white; cursor: pointer; font-size: 14px; }
+    .search-bar button:hover { background: #2ea043; }
+    .memory-card { background: #161b22; border: 1px solid #30363d; border-radius: 6px; margin-bottom: 8px; padding: 12px 16px; cursor: pointer; transition: border-color 0.15s; }
+    .memory-card:hover { border-color: #58a6ff; }
+    .memory-card.expanded { border-color: #58a6ff; }
+    .memory-header { display: flex; align-items: flex-start; gap: 8px; }
+    .badge { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 12px; white-space: nowrap; }
+    .badge-user { background: #1f6feb; color: white; }
+    .badge-feedback { background: #b62324; color: white; }
+    .badge-project { background: #3fb950; color: #0d1117; }
+    .badge-reference { background: #6e40c9; color: white; }
+    .memory-summary { font-size: 14px; color: #c9d1d9; flex: 1; }
+    .memory-meta { font-size: 11px; color: #8b949e; margin-top: 4px; }
+    .memory-content { margin-top: 10px; padding: 10px; background: #0d1117; border-radius: 4px; font-size: 13px; color: #8b949e; white-space: pre-wrap; display: none; }
+    .memory-card.expanded .memory-content { display: block; }
+    .delete-btn { background: none; border: 1px solid #f85149; border-radius: 4px; color: #f85149; padding: 2px 8px; font-size: 11px; cursor: pointer; margin-left: auto; }
+    .delete-btn:hover { background: #f85149; color: white; }
+    .score { font-size: 11px; color: #8b949e; margin-left: 8px; }
+    .panel { padding: 16px; background: #161b22; border-radius: 6px; }
+    .stat-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #21262d; font-size: 14px; }
+    .stat-value { color: #58a6ff; font-weight: 600; }
+    .session-card { background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 10px 14px; margin-bottom: 8px; font-size: 13px; }
+    .session-meta { color: #8b949e; font-size: 12px; margin-top: 4px; }
+    .empty { color: #8b949e; text-align: center; padding: 40px; font-size: 14px; }
+    .loading { color: #8b949e; text-align: center; padding: 20px; }
+  </style>
+</head>
+<body>
+<header>
+  <h1>LocCode Memory</h1>
+  <div class="stats" id="header-stats">Loading...</div>
+</header>
+<div class="main">
+  <nav class="sidebar">
+    <div class="sidebar-tab active" data-tab="all">All Memories</div>
+    <div class="sidebar-tab" data-tab="feedback">Feedback</div>
+    <div class="sidebar-tab" data-tab="user">User</div>
+    <div class="sidebar-tab" data-tab="project">Project</div>
+    <div class="sidebar-tab" data-tab="reference">Reference</div>
+    <div class="sidebar-tab" data-tab="sessions">Sessions</div>
+    <div class="sidebar-tab" data-tab="stats">Stats</div>
+  </nav>
+  <div class="content" id="content">
+    <div class="loading">Loading...</div>
+  </div>
+</div>
+
+<script>
+const BASE = '';
+let currentTab = 'all';
+let autoRefreshTimer = null;
+
+// Tabs
+document.querySelectorAll('.sidebar-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.sidebar-tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    currentTab = tab.dataset.tab;
+    render();
+  });
+});
+
+async function api(path) {
+  const res = await fetch(BASE + path);
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  return res.json();
+}
+
+async function render() {
+  const content = document.getElementById('content');
+  content.innerHTML = '<div class="loading">Loading...</div>';
+  try {
+    if (currentTab === 'stats') {
+      await renderStats();
+    } else if (currentTab === 'sessions') {
+      await renderSessions();
+    } else {
+      await renderMemories(currentTab === 'all' ? undefined : currentTab);
+    }
+  } catch (e) {
+    content.innerHTML = `<div class="empty">Error: ${e.message}</div>`;
+  }
+}
+
+async function renderMemories(type) {
+  const content = document.getElementById('content');
+  const path = type ? `/api/memories?type=${type}&limit=200` : '/api/memories?limit=200';
+  const memories = await api(path);
+
+  let html = `
+    <div class="search-bar">
+      <input type="text" id="search-input" placeholder="Search memories..." />
+      <button onclick="doSearch()">Search</button>
+    </div>
+  `;
+
+  if (memories.length === 0) {
+    html += '<div class="empty">No memories yet</div>';
+  } else {
+    html += memories.map(m => memoryCard(m)).join('');
+  }
+  content.innerHTML = html;
+
+  document.getElementById('search-input')?.addEventListener('keydown', e => {
+    if (e.key === 'Enter') doSearch();
+  });
+}
+
+function memoryCard(m, score) {
+  const badgeClass = `badge-${m.type}`;
+  const scoreHtml = score != null ? `<span class="score">${score.toFixed(3)}</span>` : '';
+  const date = new Date(m.updatedAt || m.updated_at).toLocaleDateString();
+  const accessed = m.accessCount || m.access_count || 0;
+  return `
+    <div class="memory-card" onclick="this.classList.toggle('expanded')">
+      <div class="memory-header">
+        <span class="badge ${badgeClass}">${m.type}</span>
+        <span class="memory-summary">${escHtml(m.summary)}</span>
+        ${scoreHtml}
+        <button class="delete-btn" onclick="event.stopPropagation(); forgetMemory('${escHtml(m.id)}')">Delete</button>
+      </div>
+      <div class="memory-meta">Updated ${date} · Accessed ${accessed}× · ID: ${escHtml(m.id)}</div>
+      <div class="memory-content">${escHtml(m.content)}</div>
+    </div>
+  `;
+}
+
+async function doSearch() {
+  const q = document.getElementById('search-input')?.value?.trim();
+  if (!q) { render(); return; }
+  const results = await api(`/api/search?q=${encodeURIComponent(q)}&limit=20`);
+  const content = document.getElementById('content');
+  let html = `
+    <div class="search-bar">
+      <input type="text" id="search-input" placeholder="Search memories..." value="${escHtml(q)}" />
+      <button onclick="doSearch()">Search</button>
+    </div>
+  `;
+  if (results.length === 0) {
+    html += '<div class="empty">No results found</div>';
+  } else {
+    html += results.map(r => memoryCard(r, r.score)).join('');
+  }
+  content.innerHTML = html;
+  document.getElementById('search-input')?.addEventListener('keydown', e => {
+    if (e.key === 'Enter') doSearch();
+  });
+}
+
+async function forgetMemory(id) {
+  if (!confirm(`Delete memory "${id}"?`)) return;
+  await fetch(BASE + '/api/forget', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id })
+  });
+  render();
+}
+
+async function renderSessions() {
+  const sessions = await api('/api/sessions');
+  const content = document.getElementById('content');
+  if (sessions.length === 0) {
+    content.innerHTML = '<div class="empty">No sessions recorded yet</div>';
+    return;
+  }
+  content.innerHTML = sessions.map(s => `
+    <div class="session-card">
+      <strong>${escHtml(s.id)}</strong>
+      <div class="session-meta">
+        Model: ${escHtml(s.model || '?')} ·
+        Turns: ${s.turnCount || s.turn_count || 0} ·
+        Started: ${new Date(s.startedAt || s.started_at).toLocaleString()}
+        ${s.summary ? `<div style="margin-top:6px;color:#c9d1d9">${escHtml(s.summary)}</div>` : ''}
+      </div>
+    </div>
+  `).join('');
+}
+
+async function renderStats() {
+  const stats = await api('/api/stats');
+  const content = document.getElementById('content');
+  const byType = stats.byType || {};
+  content.innerHTML = `
+    <div class="panel">
+      <div class="stat-row"><span>Total Memories</span><span class="stat-value">${stats.totalMemories}</span></div>
+      <div class="stat-row"><span>Feedback</span><span class="stat-value">${byType.feedback || 0}</span></div>
+      <div class="stat-row"><span>User</span><span class="stat-value">${byType.user || 0}</span></div>
+      <div class="stat-row"><span>Project</span><span class="stat-value">${byType.project || 0}</span></div>
+      <div class="stat-row"><span>Reference</span><span class="stat-value">${byType.reference || 0}</span></div>
+      <div class="stat-row"><span>Total Sessions</span><span class="stat-value">${stats.totalSessions}</span></div>
+      <div class="stat-row"><span>DB Size</span><span class="stat-value">${formatBytes(stats.dbSizeBytes)}</span></div>
+      <div class="stat-row"><span>Last Consolidation</span><span class="stat-value">${stats.lastConsolidation ? new Date(stats.lastConsolidation).toLocaleString() : 'Never'}</span></div>
+    </div>
+    <div style="margin-top:16px">
+      <button onclick="runConsolidate()" style="background:#238636;border:none;border-radius:6px;padding:8px 16px;color:white;cursor:pointer;font-size:14px">Run Consolidation</button>
+    </div>
+  `;
+}
+
+async function runConsolidate() {
+  const res = await fetch(BASE + '/api/consolidate', { method: 'POST' });
+  const result = await res.json();
+  alert(`Consolidation complete:\nMerged: ${result.merged}\nDeduped: ${result.deduped}\nPruned: ${result.pruned}\nSharpened: ${result.sharpened}`);
+  renderStats();
+}
+
+async function updateHeaderStats() {
+  try {
+    const stats = await api('/api/stats');
+    const el = document.getElementById('header-stats');
+    if (el) el.textContent = `${stats.totalMemories} memories · ${stats.totalSessions} sessions`;
+  } catch {}
+}
+
+function formatBytes(bytes) {
+  if (!bytes) return '0 B';
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+function escHtml(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// Initial load
+render();
+updateHeaderStats();
+
+// Auto-refresh every 30s
+setInterval(() => { render(); updateHeaderStats(); }, 30000);
+</script>
+</body>
+</html>

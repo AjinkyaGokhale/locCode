@@ -1,41 +1,41 @@
-const FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
-const INTERVAL_MS = 80;
+import { CYAN, DARK_GRAY, R } from "./render.js";
 
-let timer: ReturnType<typeof setInterval> | null = null;
+// Modern spinner frames
+const FRAMES   = ["⠧","⠇","⠏","⠃","⠏","⠇","⠉","⠙","⠸","⠼","⠴","⠦"];
+const INTERVAL = 80;
+
+let timer:   ReturnType<typeof setInterval> | null = null;
 let frameIdx = 0;
-let currentMessage = "";
+let msg      = "";
+let startMs  = 0;
 
-function clear(): void {
-  process.stdout.write("\r\x1B[K"); // carriage return + clear line
-}
+const clear = () => process.stdout.write("\r\x1B[K");
 
 function draw(): void {
-  process.stdout.write(`\r${FRAMES[frameIdx % FRAMES.length]} ${currentMessage}`);
-  frameIdx++;
+  const frame = `${CYAN}${FRAMES[frameIdx++ % FRAMES.length]}${R}`;
+  const secs  = ((Date.now() - startMs) / 1000).toFixed(1);
+  process.stdout.write(`\r  ${frame} ${msg} ${DARK_GRAY}(${secs}s)${R}`);
 }
 
 export function start(message: string): void {
   if (timer) stop();
-  currentMessage = message;
+  msg      = message;
   frameIdx = 0;
-  process.stdout.write("\x1B[?25l"); // hide cursor
+  startMs  = Date.now();
+  process.stdout.write("\x1B[?25l");
   draw();
-  timer = setInterval(draw, INTERVAL_MS);
+  timer = setInterval(draw, INTERVAL);
 }
 
-export function update(message: string): void {
-  currentMessage = message;
-}
+export function update(message: string): void { msg = message; }
 
-export function stop(finalMessage?: string): void {
+export function stop(final?: string): void {
   if (!timer) return;
   clearInterval(timer);
   timer = null;
   clear();
-  process.stdout.write("\x1B[?25h"); // restore cursor
-  if (finalMessage) process.stdout.write(`${finalMessage}\n`);
+  process.stdout.write("\x1B[?25h");
+  if (final) process.stdout.write(`${final}\n`);
 }
 
-export function isSpinning(): boolean {
-  return timer !== null;
-}
+export function isSpinning(): boolean { return timer !== null; }

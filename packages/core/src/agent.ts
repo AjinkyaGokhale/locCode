@@ -7,6 +7,8 @@ import type {
 import type { ModelClient } from "./client.js";
 import { compactSession, shouldCompact } from "./compact.js";
 import { checkGuardrails } from "./guardrails.js";
+import type { LifecycleHooks } from "./memory/hooks.js";
+import { createNoopHooks } from "./memory/hooks.js";
 import type { PermissionPolicy } from "./permissions.js";
 import { buildSystemPrompt, discoverInstructionFile } from "./prompt.js";
 import { recoverToolInput } from "./recovery.js";
@@ -71,7 +73,9 @@ export async function* runTurn(
   userInput: string,
   config: AgentConfig,
   permissionPolicy: PermissionPolicy,
+  hooks: LifecycleHooks = createNoopHooks(),
 ): AsyncGenerator<AgentEvent> {
+  hooks.onUserPromptSubmit({ userMessage: userInput, sessionId: session.id, timestamp: new Date().toISOString() });
   session.appendUser(userInput);
 
   const apiTools = TOOL_DEFINITIONS.map(toOpenAITool) as ChatCompletionTool[];
@@ -171,6 +175,13 @@ export async function* runTurn(
       const result = await executeTool(tc.name, recoveredInput, config);
       session.appendToolResult(tc.id, tc.name, result);
       yield { type: "tool_result", id: tc.id, name: tc.name, ...result };
+      hooks.onPostToolUse({
+        toolName: tc.name,
+        input: recoveredInput,
+        output: result.output,
+        isError: result.isError,
+        sessionId: session.id,
+      });
     }
 
     // Guardrails
@@ -186,5 +197,6 @@ export async function* runTurn(
     }
   }
 
+  hooks.onStop({ turnMessages: session.getLastTurnMessages(), sessionId: session.id });
   yield { type: "turn_complete", iterations: iteration };
 }

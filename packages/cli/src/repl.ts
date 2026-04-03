@@ -10,31 +10,10 @@ import {
   estimateTokens,
   runTurn,
 } from "@loccode/core";
-import type { AgentConfig, AgentEvent } from "@loccode/core";
+import type { AgentConfig } from "@loccode/core";
 import { HISTORY_PATH } from "./config.js";
 import * as render from "./render.js";
 import * as spinner from "./spinner.js";
-
-// ANSI helpers
-const BOLD = "\x1B[1m";
-const DIM = "\x1B[2m";
-const RESET = "\x1B[0m";
-const CYAN = "\x1B[36m";
-const YELLOW = "\x1B[33m";
-
-const HELP_TEXT = `
-${BOLD}Commands:${RESET}
-  ${CYAN}/help${RESET}                  Show this help
-  ${CYAN}/status${RESET}                Show session info
-  ${CYAN}/compact${RESET}               Manually compact the conversation
-  ${CYAN}/clear${RESET}                 Clear conversation history
-  ${CYAN}/save [path]${RESET}           Save session to file
-  ${CYAN}/load <path>${RESET}           Load session from file
-  ${CYAN}/tools${RESET}                 List available tools
-  ${CYAN}/permission <mode>${RESET}     Change permission mode (read-only|workspace-write|allow-all)
-  ${CYAN}/model <name>${RESET}          Switch model
-  ${CYAN}/exit${RESET}                  Exit loccode
-`;
 
 interface ReplState {
   session: Session;
@@ -42,227 +21,189 @@ interface ReplState {
   permissionMode: AgentConfig["permissionMode"];
 }
 
-async function runAgentTurn(
-  userInput: string,
-  state: ReplState,
-  rl: ReturnType<typeof createInterface>,
-): Promise<void> {
+// ─── Agent turn ───────────────────────────────────────────────────────────────
+async function runAgentTurn(input: string, state: ReplState): Promise<void> {
   const client = createClient(state.config);
   const policy = createPermissionPolicy(state.permissionMode);
 
-  // Handle bash "prompt" permission mode — ask user before executing
-  const promptingPolicy = {
-    authorize(toolName: string, input: Record<string, unknown>) {
-      const result = policy.authorize(toolName, input);
-      if (result.outcome === "prompt") {
-        // We handle this synchronously via a flag — actual prompt happens below
-        return result;
-      }
-      return result;
-    },
-  };
+  spinner.start("thinking");
 
-  spinner.start("Thinking...");
-
-  let textBuffer = "";
-  let totalIn = 0;
-  let totalOut = 0;
+  let streaming  = false;   // are we currently inside an assistant box?
+  let totalIn    = 0;
+  let totalOut   = 0;
+  const toolT    = new Map<string, number>(); // tool id → start ms
+  const writer   = new render.BoxStreamWriter();
 
   try {
-    for await (const event of runTurn(
-      client,
-      state.session,
-      userInput,
-      state.config,
-      promptingPolicy,
-    )) {
-      switch (event.type) {
-        case "text_delta":
-          textBuffer += event.content;
-          break;
+    for await (const ev of runTurn(client, state.session, input, state.config, policy)) {
+      switch (ev.type) {
 
-        case "tool_call_start":
-          // Flush any accumulated text before showing tool call
-          if (textBuffer.trim()) {
+        case "text_delta": {
+          if (!streaming) {
             spinner.stop();
-            process.stdout.write(render.renderMarkdown(textBuffer));
-            textBuffer = "";
-            spinner.start(`Tool: ${event.name}...`);
-          } else {
-            spinner.update(`Tool: ${event.name}...`);
+            process.stdout.write(render.renderAssistantBoxStart());
+            streaming = true;
           }
+          writer.write(ev.content);
           break;
+        }
+
+        case "tool_call_start": {
+          if (streaming) {
+            writer.flush();
+            process.stdout.write(render.renderAssistantBoxEnd(0, 0));
+            streaming = false;
+          } else {
+            spinner.stop();
+          }
+          toolT.set(ev.id, Date.now());
+          // Placeholder line — will be overwritten on tool_result
+          process.stdout.write(`  ${render.ORANGE}⚡${render.R} ${render.CYAN}${ev.name}${render.R} ${render.DARK_GRAY}…${render.R}\n`);
+          spinner.start(ev.name);
+          break;
+        }
 
         case "tool_result": {
           spinner.stop();
-          // Print tool name + collapsed result
-          process.stdout.write(render.renderToolResult(event.name, event.output, event.isError));
-          spinner.start("Thinking...");
+          const elapsed = toolT.has(ev.id) ? Date.now() - toolT.get(ev.id)! : undefined;
+          toolT.delete(ev.id);
+          // Replace the placeholder "▸ name …" line
+          process.stdout.write("\x1B[1A\x1B[2K");
+          process.stdout.write(render.renderToolResult(ev.name, ev.output, ev.isError, elapsed));
+          spinner.start("thinking");
           break;
         }
 
         case "usage":
-          totalIn += event.inputTokens;
-          totalOut += event.outputTokens;
+          totalIn  += ev.inputTokens;
+          totalOut += ev.outputTokens;
           break;
 
         case "guardrail_triggered":
+          if (streaming) { writer.flush(); streaming = false; }
           spinner.stop();
-          process.stdout.write(render.renderGuardrail(event.reason));
-          spinner.start("Thinking...");
+          process.stdout.write(render.renderGuardrail(ev.reason));
           break;
 
         case "turn_complete":
           spinner.stop();
-          if (textBuffer.trim()) {
-            process.stdout.write(render.renderMarkdown(textBuffer));
-          }
-          if (totalIn > 0 || totalOut > 0) {
+          if (streaming) {
+            writer.flush();
+            process.stdout.write(render.renderAssistantBoxEnd(totalIn, totalOut));
+            streaming = false;
+          } else if (totalIn > 0 || totalOut > 0) {
             process.stdout.write(render.renderUsage(totalIn, totalOut));
           }
           break;
 
         case "error":
           spinner.stop();
-          process.stdout.write(render.renderError(event.message));
+          if (streaming) { writer.flush(); streaming = false; }
+          process.stdout.write(render.renderError(ev.message));
           break;
       }
     }
   } catch (err) {
     spinner.stop();
-    const msg = err instanceof Error ? err.message : String(err);
-    process.stdout.write(render.renderError(msg));
+    if (streaming) { writer.flush(); streaming = false; }
+    process.stdout.write(render.renderError(err instanceof Error ? err.message : String(err)));
   }
 }
 
+// ─── Commands ─────────────────────────────────────────────────────────────────
 async function handleCommand(
   line: string,
   state: ReplState,
   rl: ReturnType<typeof createInterface>,
-): Promise<boolean> {
-  const parts = line.slice(1).trim().split(/\s+/);
-  const cmd = parts[0]?.toLowerCase() ?? "";
-  const args = parts.slice(1);
+): Promise<void> {
+  const [rawCmd, ...args] = line.slice(1).trim().split(/\s+/);
+  const cmd = rawCmd?.toLowerCase() ?? "";
 
   switch (cmd) {
     case "help":
-      process.stdout.write(HELP_TEXT);
-      return true;
+      process.stdout.write(render.renderHelp());
+      break;
 
-    case "status": {
-      const tokens = estimateTokens(state.session);
-      process.stdout.write(
-        [
-          "",
-          `  ${BOLD}Session:${RESET}    ${state.session.id}`,
-          `  ${BOLD}Model:${RESET}      ${state.config.model}`,
-          `  ${BOLD}Backend:${RESET}    ${state.config.baseUrl}`,
-          `  ${BOLD}Permission:${RESET} ${state.permissionMode}`,
-          `  ${BOLD}Messages:${RESET}   ${state.session.messages.length}`,
-          `  ${BOLD}~Tokens:${RESET}    ${tokens.toLocaleString()}`,
-          "",
-        ].join("\n"),
-      );
-      return true;
-    }
+    case "status":
+      process.stdout.write(render.renderStatus({
+        Session:    state.session.id,
+        Model:      state.config.model,
+        Server:     state.config.baseUrl,
+        Permission: state.permissionMode,
+        Messages:   String(state.session.messages.length),
+        "~Tokens":  estimateTokens(state.session).toLocaleString(),
+      }));
+      break;
 
     case "compact": {
       const before = state.session.messages.length;
-      const client = createClient(state.config);
-      spinner.start("Compacting...");
-      await compactSession(client, state.session, state.config);
+      spinner.start("compacting…");
+      await compactSession(createClient(state.config), state.session, state.config);
       spinner.stop();
-      process.stdout.write(
-        render.renderInfo(`Compacted: ${before} → ${state.session.messages.length} messages`),
-      );
-      return true;
+      process.stdout.write(render.renderSuccess(`Compacted: ${before} → ${state.session.messages.length} messages`));
+      break;
     }
 
     case "clear":
       state.session = Session.new(state.config);
-      process.stdout.write(render.renderInfo("Session cleared."));
-      return true;
+      process.stdout.write(render.renderSuccess("Session cleared."));
+      break;
 
     case "save": {
-      const savePath =
-        args[0] ?? resolve(process.cwd(), ".loccode", "sessions", `${state.session.id}.json`);
-      mkdirSync(dirname(savePath), { recursive: true });
-      const written = state.session.save(dirname(savePath));
-      // session.save writes to dirname/id.json — if user gave explicit path, copy
-      process.stdout.write(render.renderInfo(`Saved to ${written}`));
-      return true;
+      const path = args[0] ?? resolve(process.cwd(), ".loccode", "sessions", `${state.session.id}.json`);
+      mkdirSync(dirname(path), { recursive: true });
+      process.stdout.write(render.renderSuccess(`Saved → ${state.session.save(dirname(path))}`));
+      break;
     }
 
-    case "load": {
-      if (!args[0]) {
-        process.stdout.write(render.renderError("Usage: /load <path>"));
-        return true;
-      }
+    case "load":
+      if (!args[0]) { process.stdout.write(render.renderError("Usage: /load <path>")); break; }
       try {
         state.session = Session.load(args[0]);
-        process.stdout.write(
-          render.renderInfo(
-            `Loaded session ${state.session.id} (${state.session.messages.length} messages)`,
-          ),
-        );
+        process.stdout.write(render.renderSuccess(`Loaded ${state.session.id} (${state.session.messages.length} msgs)`));
       } catch {
-        process.stdout.write(render.renderError(`Could not load: ${args[0]}`));
+        process.stdout.write(render.renderError(`Cannot load: ${args[0]}`));
       }
-      return true;
-    }
+      break;
 
-    case "tools": {
-      const lines = [`\n  ${BOLD}Available tools:${RESET}`];
-      for (const t of TOOL_DEFINITIONS) {
-        lines.push(`  ${CYAN}${t.name.padEnd(16)}${RESET}${DIM}${t.description}${RESET}`);
-      }
-      lines.push("");
-      process.stdout.write(lines.join("\n"));
-      return true;
-    }
+    case "tools":
+      process.stdout.write(render.renderToolsTable(TOOL_DEFINITIONS));
+      break;
 
     case "permission": {
-      const mode = args[0];
-      if (mode === "read-only" || mode === "workspace-write" || mode === "allow-all") {
-        state.permissionMode = mode;
-        process.stdout.write(render.renderInfo(`Permission mode set to ${mode}`));
+      const m = args[0];
+      if (m === "read-only" || m === "workspace-write" || m === "allow-all") {
+        state.permissionMode = m;
+        process.stdout.write(render.renderSuccess(`Permission → ${m}`));
       } else {
-        process.stdout.write(
-          render.renderError("Valid modes: read-only | workspace-write | allow-all"),
-        );
+        process.stdout.write(render.renderError("Modes: read-only | workspace-write | allow-all"));
       }
-      return true;
+      break;
     }
 
-    case "model": {
-      if (!args[0]) {
-        process.stdout.write(render.renderError("Usage: /model <name>"));
-        return true;
-      }
+    case "model":
+      if (!args[0]) { process.stdout.write(render.renderError("Usage: /model <name>")); break; }
       state.config = { ...state.config, model: args[0] };
-      process.stdout.write(render.renderInfo(`Model set to ${args[0]}`));
-      return true;
-    }
+      process.stdout.write(render.renderSuccess(`Model → ${args[0]}`));
+      break;
 
     case "mem":
-      process.stdout.write(render.renderInfo("Memory system not yet implemented (Phase 3)."));
-      return true;
+      process.stdout.write(render.renderInfo("Memory viewer → http://localhost:37899/viewer"));
+      break;
 
     case "exit":
     case "quit":
       rl.close();
       process.stdout.write("\n");
       process.exit(0);
-      return true; // unreachable but satisfies TS
+      break;
 
     default:
-      process.stdout.write(
-        render.renderError(`Unknown command: /${cmd}. Type /help for commands.`),
-      );
-      return true;
+      process.stdout.write(render.renderError(`Unknown command: /${cmd}  —  type /help`));
   }
 }
 
+// ─── REPL entry ───────────────────────────────────────────────────────────────
 export async function startRepl(config: AgentConfig): Promise<void> {
   mkdirSync(dirname(HISTORY_PATH), { recursive: true });
 
@@ -273,41 +214,79 @@ export async function startRepl(config: AgentConfig): Promise<void> {
   };
 
   const rl = createInterface({
-    input: process.stdin,
-    output: process.stdout,
-    prompt: `${CYAN}>${RESET} `,
+    input:       process.stdin,
+    output:      process.stdout,
+    prompt:      render.PROMPT_STR,
     historySize: 500,
-    // @ts-expect-error — readline accepts a path but types don't expose it
-    crlfDelay: Number.POSITIVE_INFINITY,
+    // @ts-expect-error — not in types but works in Node ≥18
+    crlfDelay:   Infinity,
   });
 
-  // Graceful exit on Ctrl+C
+  // Patch stdout to prevent readline's clearScreenDown from erasing the bottom frame.
+  // readline calls \x1B[0J (clearScreenDown) on every keypress refresh; we replace it
+  // with \x1B[2K\r (clear current line only) so pre-drawn lines below the cursor persist.
+  let _origWrite: typeof process.stdout.write | null = null;
+
+  function patchStdout(): void {
+    if (_origWrite) return;
+    const orig = process.stdout.write.bind(process.stdout);
+    _origWrite = orig;
+    // @ts-expect-error — intentional monkey-patch
+    process.stdout.write = (chunk: unknown, ...rest: unknown[]) => {
+      if (typeof chunk === "string") {
+        chunk = chunk.replace(/\x1B\[0?J/g, "\x1B[2K\r");
+      }
+      return (orig as Function)(chunk, ...rest);
+    };
+  }
+
+  function unpatchStdout(): void {
+    if (_origWrite) {
+      // @ts-expect-error — restoring original
+      process.stdout.write = _origWrite;
+      _origWrite = null;
+    }
+  }
+
+  /** Draw top border, pre-render bottom frame below input line, then show readline prompt */
+  function doPrompt(): void {
+    unpatchStdout();
+    process.stdout.write(render.renderInputTop());
+    // Draw bottom line + patience below the (blank) input line, then cursor-up back to it
+    process.stdout.write("\n" + render.renderInputBottom() + "\x1B[2A\r");
+    patchStdout();
+    rl.prompt();
+  }
+
   rl.on("SIGINT", () => {
     if (spinner.isSpinning()) {
       spinner.stop();
       process.stdout.write(render.renderInfo("Cancelled."));
-      rl.prompt();
+      doPrompt();
     } else {
-      process.stdout.write("\n");
+      unpatchStdout();
+      // cursor is on the input line; move down past bottom border + patience line before exiting
+      process.stdout.write("\x1B[2B\n");
       process.exit(0);
     }
   });
 
-  rl.prompt();
+  doPrompt();
 
   for await (const line of rl) {
+    unpatchStdout();
     const trimmed = line.trim();
-    if (!trimmed) {
-      rl.prompt();
-      continue;
-    }
+    if (!trimmed) { doPrompt(); continue; }
+
+    // Show the user's message as a styled bubble
+    process.stdout.write(render.renderUserBubble(trimmed));
 
     if (trimmed.startsWith("/")) {
       await handleCommand(trimmed, state, rl);
     } else {
-      await runAgentTurn(trimmed, state, rl);
+      await runAgentTurn(trimmed, state);
     }
 
-    rl.prompt();
+    doPrompt();
   }
 }

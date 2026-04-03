@@ -1,5 +1,6 @@
 // Public API
 export { runTurn } from "./agent.js";
+export * from "./memory/index.js";
 export { createClient } from "./client.js";
 export { compactSession, estimateTokens, shouldCompact } from "./compact.js";
 export { checkGuardrails } from "./guardrails.js";
