@@ -21,7 +21,14 @@ type ExtensionMessage =
   | { type: "sessionCleared" }
   | { type: "sessionSaved"; path: string }
   | { type: "permissionChanged"; mode: string }
-  | { type: "init"; permissionMode: string; model: string; trusted: boolean; dir: string; maxTokens: number }
+  | {
+      type: "init";
+      permissionMode: string;
+      model: string;
+      trusted: boolean;
+      dir: string;
+      maxTokens: number;
+    }
   | { type: "permissionRequest"; id: string; command: string }
   | { type: "trustGranted" }
   | { type: "compacted" };
@@ -32,12 +39,15 @@ const vscode = acquireVsCodeApi();
 let isThinking = false;
 let currentAssistantEl: HTMLElement | null = null;
 let currentTextEl: HTMLElement | null = null;
-let lastInputTokens = 0;  // latest prompt size — best proxy for current context fill
+let lastInputTokens = 0; // latest prompt size — best proxy for current context fill
 let maxTokens = 8000;
 let permissionMode = "workspace-write";
 
 // Track open tool call groups by id
-const toolGroups = new Map<string, { details: HTMLDetailsElement; inputEl: HTMLElement; outputEl: HTMLElement | null }>();
+const toolGroups = new Map<
+  string,
+  { details: HTMLDetailsElement; inputEl: HTMLElement; outputEl: HTMLElement | null }
+>();
 
 // ── DOM refs ─────────────────────────────────────────────────────────────
 
@@ -109,16 +119,16 @@ inputEl.addEventListener("input", () => {
 
 permDismiss.addEventListener("click", () => hidePermBar());
 
-permButtons.forEach((btn) => {
+for (const btn of Array.from(permButtons)) {
   btn.addEventListener("click", () => {
-    const mode = btn.dataset["mode"]!;
+    const mode = btn.dataset.mode!;
     permissionMode = mode;
     vscode.postMessage({ type: "changePermission", mode });
     updatePermUI(mode);
     // Hide shortly after selection so user sees the change
     schedulePermHide(800);
   });
-});
+}
 
 // Hide on first keystroke
 inputEl.addEventListener("keydown", () => hidePermBar(), { once: true });
@@ -184,7 +194,7 @@ function handleMessage(msg: ExtensionMessage): void {
     case "toolCallStart": {
       ensureAssistantEl();
       const group = createToolGroup(msg.id, msg.name);
-      currentAssistantEl!.appendChild(group.details);
+      currentAssistantEl?.appendChild(group.details);
       toolGroups.set(msg.id, group);
       scrollToBottom();
       break;
@@ -207,9 +217,8 @@ function handleMessage(msg: ExtensionMessage): void {
 
         const outputEl = document.createElement("div");
         outputEl.className = `tool-output${msg.isError ? " error" : ""}`;
-        outputEl.textContent = msg.output.length > 2000
-          ? `${msg.output.slice(0, 2000)}\n… (truncated)`
-          : msg.output;
+        outputEl.textContent =
+          msg.output.length > 2000 ? `${msg.output.slice(0, 2000)}\n… (truncated)` : msg.output;
         group.details.appendChild(outputEl);
         // Auto-open on error
         if (msg.isError) group.details.open = true;
@@ -260,7 +269,9 @@ function handleMessage(msg: ExtensionMessage): void {
       lastInputTokens = 0;
       updateCtxBar();
       ctxStatus.textContent = "auto-compacted";
-      setTimeout(() => { ctxStatus.textContent = ""; }, 3000);
+      setTimeout(() => {
+        ctxStatus.textContent = "";
+      }, 3000);
       appendSystemMessage("Context auto-compacted to free space.", "info");
       break;
 
@@ -315,7 +326,7 @@ function appendTextDelta(content: string): void {
   if (!currentTextEl) {
     currentTextEl = document.createElement("div");
     currentTextEl.className = "text-content";
-    currentAssistantEl!.appendChild(currentTextEl);
+    currentAssistantEl?.appendChild(currentTextEl);
   }
   // Simple inline markdown: bold, inline code
   currentTextEl.textContent = (currentTextEl.textContent ?? "") + content;
@@ -342,10 +353,7 @@ function createToolGroup(
   return { details, inputEl, outputEl: null };
 }
 
-function appendSystemMessage(
-  text: string,
-  kind: "info" | "warning" | "error",
-): void {
+function appendSystemMessage(text: string, kind: "info" | "warning" | "error"): void {
   const el = document.createElement("div");
   el.style.cssText = `
     font-size: 11px;
@@ -371,7 +379,7 @@ function setThinking(thinking: boolean): void {
     dot.id = "thinking-indicator";
     dot.textContent = "●";
     ensureAssistantEl();
-    currentAssistantEl!.appendChild(dot);
+    currentAssistantEl?.appendChild(dot);
   } else {
     document.getElementById("thinking-indicator")?.remove();
     inputEl.disabled = false;
@@ -381,9 +389,9 @@ function setThinking(thinking: boolean): void {
 
 function updatePermUI(mode: string): void {
   permModeText.textContent = mode;
-  permButtons.forEach((btn) => {
-    btn.classList.toggle("active", btn.dataset["mode"] === mode);
-  });
+  for (const btn of Array.from(permButtons)) {
+    btn.classList.toggle("active", btn.dataset.mode === mode);
+  }
 }
 
 function showPermBarBriefly(): void {
@@ -398,13 +406,20 @@ function schedulePermHide(ms: number): void {
 }
 
 function hidePermBar(): void {
-  if (permHideTimer) { clearTimeout(permHideTimer); permHideTimer = null; }
+  if (permHideTimer) {
+    clearTimeout(permHideTimer);
+    permHideTimer = null;
+  }
   if (permBar.style.display === "none") return;
   permBar.classList.add("hiding");
-  permBar.addEventListener("animationend", () => {
-    permBar.style.display = "none";
-    permBar.classList.remove("hiding");
-  }, { once: true });
+  permBar.addEventListener(
+    "animationend",
+    () => {
+      permBar.style.display = "none";
+      permBar.classList.remove("hiding");
+    },
+    { once: true },
+  );
 }
 
 function updateCtxBar(): void {
@@ -420,9 +435,10 @@ function updateCtxBar(): void {
   } else {
     ctxStatus.textContent = "";
   }
-  ctxLabel.textContent = lastInputTokens > 0
-    ? `${lastInputTokens.toLocaleString()} / ${maxTokens.toLocaleString()} tokens`
-    : "0 tokens";
+  ctxLabel.textContent =
+    lastInputTokens > 0
+      ? `${lastInputTokens.toLocaleString()} / ${maxTokens.toLocaleString()} tokens`
+      : "0 tokens";
 }
 
 function showApprovalCard(id: string, command: string): void {

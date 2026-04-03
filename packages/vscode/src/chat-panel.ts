@@ -1,15 +1,20 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import * as vscode from "vscode";
 import {
+  MemoryWorkerClientImpl,
   Session,
   createClient,
-  runTurn,
-  MemoryWorkerClientImpl,
   createMemoryHooks,
   createNoopHooks,
+  runTurn,
 } from "@loccode/core";
-import type { AgentConfig, LifecycleHooks, PermissionPolicy, PermissionResult } from "@loccode/core";
+import type {
+  AgentConfig,
+  LifecycleHooks,
+  PermissionPolicy,
+  PermissionResult,
+} from "@loccode/core";
+import * as vscode from "vscode";
 
 // Injected by webpack DefinePlugin at build time
 declare const MEMORY_WORKER_SCRIPT: string;
@@ -41,7 +46,14 @@ type ExtensionMessage =
   | { type: "sessionCleared" }
   | { type: "sessionSaved"; path: string }
   | { type: "permissionChanged"; mode: AgentConfig["permissionMode"] }
-  | { type: "init"; permissionMode: AgentConfig["permissionMode"]; model: string; trusted: boolean; dir: string; maxTokens: number }
+  | {
+      type: "init";
+      permissionMode: AgentConfig["permissionMode"];
+      model: string;
+      trusted: boolean;
+      dir: string;
+      maxTokens: number;
+    }
   | { type: "trustGranted" }
   | { type: "compacted" };
 
@@ -115,7 +127,7 @@ class AsyncPermissionPolicy implements PermissionPolicy {
     if (toolName === "bash") {
       if (this.alwaysAllow) return { outcome: "allow", reason: "" };
       const id = Math.random().toString(36).slice(2, 10);
-      const command = (input["command"] as string | undefined) ?? String(input);
+      const command = (input.command as string | undefined) ?? String(input);
       this.post({ type: "permissionRequest", id, command });
       return new Promise<PermissionResult>((resolve) => {
         this.pending.set(id, resolve);
@@ -209,9 +221,7 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider {
 
     view.webview.html = this.getHtml(view.webview);
 
-    view.webview.onDidReceiveMessage((msg: WebviewMessage) =>
-      this.handleMessage(msg),
-    );
+    view.webview.onDidReceiveMessage((msg: WebviewMessage) => this.handleMessage(msg));
 
     // Send initial state once webview is ready (small delay for load)
     setTimeout(() => {
@@ -344,7 +354,11 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider {
             }
             break;
           case "usage":
-            this.post({ type: "usage", inputTokens: event.inputTokens, outputTokens: event.outputTokens });
+            this.post({
+              type: "usage",
+              inputTokens: event.inputTokens,
+              outputTokens: event.outputTokens,
+            });
             break;
           case "compacted":
             this.post({ type: "compacted" });
@@ -402,12 +416,7 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider {
   }
 
   private getHtml(webview: vscode.Webview): string {
-    const htmlPath = path.join(
-      this.extensionUri.fsPath,
-      "src",
-      "webview",
-      "index.html",
-    );
+    const htmlPath = path.join(this.extensionUri.fsPath, "src", "webview", "index.html");
 
     // URI for compiled webview JS
     const scriptUri = webview.asWebviewUri(
@@ -433,8 +442,7 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider {
 
 function getNonce(): string {
   let text = "";
-  const possible =
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  const possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
   for (let i = 0; i < 32; i++) {
     text += possible.charAt(Math.floor(Math.random() * possible.length));
   }

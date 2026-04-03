@@ -1,5 +1,5 @@
 /* eslint-disable */
-const path = require("path");
+const path = require("node:path");
 const webpack = require("webpack");
 
 // Resolve the memory worker script path at build time (before webpack bundling)
