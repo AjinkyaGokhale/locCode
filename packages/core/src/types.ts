@@ -6,6 +6,7 @@ export type AgentEvent =
   | { type: "tool_result"; id: string; name: string; output: string; isError: boolean }
   | { type: "usage"; inputTokens: number; outputTokens: number }
   | { type: "turn_complete"; iterations: number }
+  | { type: "compacted" }
   | { type: "guardrail_triggered"; reason: string }
   | { type: "error"; message: string };
 

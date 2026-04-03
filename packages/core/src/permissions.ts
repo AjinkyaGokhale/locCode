@@ -8,7 +8,7 @@ export interface PermissionResult {
 }
 
 export interface PermissionPolicy {
-  authorize(toolName: string, input: Record<string, unknown>): PermissionResult;
+  authorize(toolName: string, input: Record<string, unknown>): PermissionResult | Promise<PermissionResult>;
 }
 
 // Tools that are always read-only and safe

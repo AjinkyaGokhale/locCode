@@ -66,8 +66,10 @@
     }
   },
   "scripts": {
-    "build": "echo 'VS Code extension build — implement in Phase 4'",
-    "clean": "rm -rf dist"
+    "build": "webpack --mode none",
+    "build:watch": "webpack --mode none --watch",
+    "clean": "rm -rf dist",
+    "package": "vsce package --no-dependencies"
   },
   "dependencies": {
     "@loccode/core": "workspace:*"
@@ -75,6 +77,10 @@
   "devDependencies": {
     "@types/node": "^22.10.10",
     "@types/vscode": "^1.85.0",
-    "typescript": "^5.7.3"
+    "@vscode/vsce": "^3.0.0",
+    "ts-loader": "^9.5.1",
+    "typescript": "^5.7.3",
+    "webpack": "^5.97.1",
+    "webpack-cli": "^5.1.4"
   }
 }

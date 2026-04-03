@@ -86,6 +86,12 @@ export async function* runTurn(
   let iteration = 0;
 
   for (; iteration < config.maxIterations; iteration++) {
+    // Compact before sending if context is too large
+    if (shouldCompact(session, config.maxTokensBeforeCompact)) {
+      await compactSession(client, session, config);
+      yield { type: "compacted" };
+    }
+
     const apiMessages = buildApiMessages(session, config);
     const assistantBlocks: ContentBlock[] = [];
     const pendingToolCalls = new Map<number, { id: string; name: string; args: string }>();
@@ -156,7 +162,7 @@ export async function* runTurn(
     for (const [, tc] of pendingToolCalls) {
       const recoveredInput = recoverToolInput(tc.args, tc.name, TOOL_DEFINITIONS);
 
-      const permission = permissionPolicy.authorize(tc.name, recoveredInput);
+      const permission = await permissionPolicy.authorize(tc.name, recoveredInput);
       if (permission.outcome === "deny") {
         const result = { output: `Permission denied: ${permission.reason}`, isError: true };
         session.appendToolResult(tc.id, tc.name, result);
@@ -193,11 +199,6 @@ export async function* runTurn(
     if (guardrail.shouldStop) {
       yield { type: "guardrail_triggered", reason: guardrail.reason };
       break;
-    }
-
-    // Compact if needed
-    if (shouldCompact(session, config.maxTokensBeforeCompact)) {
-      await compactSession(client, session, config);
     }
   }
 

@@ -1,0 +1,8 @@
+src/
+node_modules/
+.docu/
+webpack.config.js
+tsconfig.json
+**/*.map
+**/*.ts
+!dist/**

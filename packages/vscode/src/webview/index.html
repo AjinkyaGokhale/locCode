@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta
+    http-equiv="Content-Security-Policy"
+    content="default-src 'none'; style-src ${cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';"
+  />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link href="${cssUri}" rel="stylesheet" />
+  <title>LocCode</title>
+</head>
+<body>
+  <!-- Model header -->
+  <div id="model-header">
+    <span id="model-dot"></span>
+    <span id="model-name">detecting…</span>
+  </div>
+
+  <!-- Permission toast (shown briefly on session start) -->
+  <div id="permission-bar" style="display:none">
+    <div id="perm-left">
+      <span id="perm-mode-text">workspace-write</span>
+      <div id="perm-buttons">
+        <button class="perm-btn" data-mode="read-only">Read-only</button>
+        <button class="perm-btn" data-mode="workspace-write">Write</button>
+        <button class="perm-btn" data-mode="allow-all">Allow all</button>
+      </div>
+    </div>
+    <button id="perm-dismiss" title="Dismiss">✕</button>
+  </div>
+
+  <!-- No-backend banner (hidden by default) -->
+  <div id="no-backend-banner" style="display:none">
+    <strong>⚠ No local model connected</strong>
+    <div id="no-backend-steps">
+      Start one of these, then <a id="reload-link" href="#">reload the window</a>:
+      <ul>
+        <li><code>ollama serve</code> (then <code>ollama pull qwen2.5-coder:7b</code>)</li>
+        <li>Open LM Studio and load a model</li>
+        <li><code>./llama-server -m model.gguf</code></li>
+      </ul>
+      Or set a URL in <a id="settings-link" href="#">LocCode settings</a>.
+    </div>
+  </div>
+
+  <!-- Permission approval card (injected into #messages dynamically) -->
+  <template id="tpl-approval">
+    <div class="approval-card">
+      <div class="approval-header">
+        <span class="approval-icon">⚡</span>
+        <span class="approval-label">bash wants to run:</span>
+      </div>
+      <pre class="approval-cmd"></pre>
+      <div class="approval-actions">
+        <button class="approval-btn allow">Allow once</button>
+        <button class="approval-btn always">Always allow</button>
+        <button class="approval-btn deny">Deny</button>
+      </div>
+    </div>
+  </template>
+
+  <!-- Message list -->
+  <div id="messages"></div>
+
+  <!-- Directory trust banner (shown above token bar when untrusted) -->
+  <div id="trust-banner" style="display:none">
+    <div id="trust-info">
+      <span id="trust-icon">🔒</span>
+      <div>
+        <strong>Trust this directory?</strong>
+        <span id="trust-dir-path"></span>
+      </div>
+    </div>
+    <div id="trust-actions">
+      <button id="btn-trust">Trust</button>
+      <button id="btn-deny-trust">No</button>
+    </div>
+  </div>
+
+  <!-- Context bar -->
+  <div id="context-bar">
+    <div id="ctx-left">
+      <div id="ctx-track">
+        <div id="ctx-fill"></div>
+      </div>
+      <span id="ctx-label">0 tokens</span>
+      <span id="ctx-status"></span>
+    </div>
+    <div id="ctx-actions">
+      <!-- Save -->
+      <button id="btn-save" title="Save session">
+        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>
+        </svg>
+      </button>
+      <!-- Clear (with inline confirm) -->
+      <button id="btn-clear" title="Clear session">
+        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+        </svg>
+      </button>
+      <!-- Confirm clear overlay -->
+      <div id="clear-confirm" style="display:none">
+        Clear session? <button id="btn-clear-yes">Yes</button><button id="btn-clear-no">No</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Input area -->
+  <div id="input-area">
+    <div id="input-wrapper">
+      <textarea
+        id="input"
+        rows="1"
+        placeholder="Ask LocCode…"
+      ></textarea>
+      <button id="btn-send" title="Send (Enter)">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/>
+        </svg>
+      </button>
+    </div>
+    <p id="input-hint">Enter to send · Shift+Enter for newline</p>
+  </div>
+
+  <script nonce="${nonce}" src="${scriptUri}"></script>
+</body>
+</html>

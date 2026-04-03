@@ -1,0 +1,22 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "build",
+      "type": "shell",
+      "command": "npx webpack --mode none",
+      "group": "build",
+      "presentation": { "reveal": "silent" },
+      "problemMatcher": ["$ts-webpack-watch"]
+    },
+    {
+      "label": "watch",
+      "type": "shell",
+      "command": "npx webpack --mode none --watch",
+      "group": "build",
+      "isBackground": true,
+      "presentation": { "reveal": "never" },
+      "problemMatcher": ["$ts-webpack-watch"]
+    }
+  ]
+}
