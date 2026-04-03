@@ -1,0 +1,80 @@
+{
+  "name": "loccode-vscode",
+  "displayName": "LocCode",
+  "description": "Local-first AI coding agent — VS Code extension",
+  "version": "0.1.0",
+  "license": "AGPL-3.0-only",
+  "publisher": "loccode",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["AI", "Other"],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      { "command": "loccode.openChat", "title": "LocCode: Open Chat" },
+      { "command": "loccode.explainSelection", "title": "LocCode: Explain Selection" },
+      { "command": "loccode.editSelection", "title": "LocCode: Edit Selection" },
+      { "command": "loccode.fixSelection", "title": "LocCode: Fix Selection" },
+      { "command": "loccode.writeTests", "title": "LocCode: Write Tests for Selection" },
+      { "command": "loccode.inlineChat", "title": "LocCode: Inline Chat" }
+    ],
+    "configuration": {
+      "title": "LocCode",
+      "properties": {
+        "loccode.baseUrl": {
+          "type": "string",
+          "default": "http://localhost:11434/v1",
+          "description": "OpenAI-compatible API base URL"
+        },
+        "loccode.model": {
+          "type": "string",
+          "default": "",
+          "description": "Model name (blank for auto-detect)"
+        },
+        "loccode.apiKey": {
+          "type": "string",
+          "default": "",
+          "description": "API key (leave empty for local models)"
+        },
+        "loccode.permissionMode": {
+          "type": "string",
+          "enum": ["read-only", "workspace-write", "allow-all"],
+          "default": "workspace-write",
+          "description": "Tool execution permission mode"
+        },
+        "loccode.maxIterations": {
+          "type": "number",
+          "default": 6,
+          "description": "Maximum tool call iterations per turn"
+        }
+      }
+    },
+    "viewsContainers": {
+      "activitybar": [{ "id": "loccode", "title": "LocCode", "icon": "assets/icon.svg" }]
+    },
+    "views": {
+      "loccode": [{ "type": "webview", "id": "loccode.chatView", "name": "Chat" }]
+    },
+    "menus": {
+      "editor/context": [
+        { "command": "loccode.explainSelection", "when": "editorHasSelection", "group": "loccode" },
+        { "command": "loccode.editSelection", "when": "editorHasSelection", "group": "loccode" },
+        { "command": "loccode.fixSelection", "when": "editorHasSelection", "group": "loccode" }
+      ]
+    }
+  },
+  "scripts": {
+    "build": "echo 'VS Code extension build — implement in Phase 4'",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@loccode/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.10",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.7.3"
+  }
+}

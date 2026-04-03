@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+.turbo/
+
+# pnpm
+.pnpm-store/
+
+# SQLite / memory
+*.db
+*.db-shm
+*.db-wal
+*.pid
+
+# Sessions
+.loccode/
+
+# Editor
+.vscode/settings.json
+.idea/
+.docu/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test artifacts
+coverage/
+*.lcov
+
+# VS Code extension
+*.vsix
