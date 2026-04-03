@@ -36,7 +36,7 @@ export async function retrieveForPrompt(
   const byType = new Map<string, SearchResult[]>();
   for (const r of results) {
     if (!byType.has(r.type)) byType.set(r.type, []);
-    byType.get(r.type)!.push(r);
+    byType.get(r.type)?.push(r);
   }
 
   const prioritized: SearchResult[] = [];

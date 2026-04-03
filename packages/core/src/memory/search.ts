@@ -64,7 +64,13 @@ export function reciprocalRankFusion(
       existing.keywordScore = rrfScore;
       existing.matchSource = "both";
     } else {
-      scores.set(r.id, { ...r, score: rrfScore, keywordScore: rrfScore, semanticScore: 0, matchSource: "keyword" });
+      scores.set(r.id, {
+        ...r,
+        score: rrfScore,
+        keywordScore: rrfScore,
+        semanticScore: 0,
+        matchSource: "keyword",
+      });
     }
   }
 
@@ -77,7 +83,13 @@ export function reciprocalRankFusion(
       existing.semanticScore = rrfScore;
       existing.matchSource = "both";
     } else {
-      scores.set(r.id, { ...r, score: rrfScore, keywordScore: 0, semanticScore: rrfScore, matchSource: "semantic" });
+      scores.set(r.id, {
+        ...r,
+        score: rrfScore,
+        keywordScore: 0,
+        semanticScore: rrfScore,
+        matchSource: "semantic",
+      });
     }
   }
 
@@ -96,11 +108,27 @@ export async function semanticSearch(
 
   const rows = type
     ? (db
-        .prepare("SELECT id, type, summary, content, embedding FROM memories WHERE type = ? AND embedding IS NOT NULL")
-        .all(type) as Array<{ id: string; type: string; summary: string; content: string; embedding: Buffer }>)
+        .prepare(
+          "SELECT id, type, summary, content, embedding FROM memories WHERE type = ? AND embedding IS NOT NULL",
+        )
+        .all(type) as Array<{
+        id: string;
+        type: string;
+        summary: string;
+        content: string;
+        embedding: Buffer;
+      }>)
     : (db
-        .prepare("SELECT id, type, summary, content, embedding FROM memories WHERE embedding IS NOT NULL")
-        .all() as Array<{ id: string; type: string; summary: string; content: string; embedding: Buffer }>);
+        .prepare(
+          "SELECT id, type, summary, content, embedding FROM memories WHERE embedding IS NOT NULL",
+        )
+        .all() as Array<{
+        id: string;
+        type: string;
+        summary: string;
+        content: string;
+        embedding: Buffer;
+      }>);
 
   const scored = rows
     .map((row) => {
@@ -175,7 +203,9 @@ export function typeSearch(
 ): SearchResult[] {
   const { limit = 10 } = options;
   const rows = db
-    .prepare("SELECT id, type, summary, content FROM memories WHERE type = ? ORDER BY updated_at DESC LIMIT ?")
+    .prepare(
+      "SELECT id, type, summary, content FROM memories WHERE type = ? ORDER BY updated_at DESC LIMIT ?",
+    )
     .all(type, limit) as Array<{ id: string; type: string; summary: string; content: string }>;
 
   return rows.map((row) => ({

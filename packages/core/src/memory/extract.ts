@@ -55,7 +55,11 @@ export async function extractFromObservations(
   try {
     for await (const chunk of client.streamChat(
       [
-        { role: "system", content: "You extract memories from coding assistant sessions. Always respond with valid JSON only." },
+        {
+          role: "system",
+          content:
+            "You extract memories from coding assistant sessions. Always respond with valid JSON only.",
+        },
         { role: "user", content: EXTRACTION_PROMPT + obsText },
       ],
       [],
@@ -107,7 +111,10 @@ function parseExtractionResponse(
 ): Array<{ type: string; id: string; summary: string; content: string }> {
   try {
     // Strip markdown fences
-    const cleaned = text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+    const cleaned = text
+      .replace(/```json\n?/g, "")
+      .replace(/```\n?/g, "")
+      .trim();
     const parsed = JSON.parse(cleaned);
     if (!Array.isArray(parsed)) return [];
 

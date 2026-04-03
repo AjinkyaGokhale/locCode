@@ -32,7 +32,7 @@ export class LocalEmbedder {
 
   async embed(text: string): Promise<Float32Array> {
     if (!this.pipe) await this.init();
-    const output = await this.pipe!(text, { pooling: "mean", normalize: true });
+    const output = await this.pipe?.(text, { pooling: "mean", normalize: true });
     return output.data as Float32Array;
   }
 

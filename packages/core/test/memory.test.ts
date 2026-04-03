@@ -1,5 +1,6 @@
 import type Database from "better-sqlite3";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { shouldConsolidate } from "../src/memory/consolidate.js";
 import {
   cosineSimilarity,
   deserializeEmbedding,
@@ -21,8 +22,6 @@ import {
   upsertMemory,
 } from "../src/memory/store.js";
 import type { Memory } from "../src/memory/store.js";
-import { shouldConsolidate } from "../src/memory/consolidate.js";
-
 
 function makeMemory(overrides: Partial<Memory> = {}): Memory {
   const now = new Date().toISOString();
@@ -56,10 +55,10 @@ describe("SQLite CRUD", () => {
     upsertMemory(db, mem);
     const retrieved = getMemory(db, mem.id);
     expect(retrieved).not.toBeNull();
-    expect(retrieved!.id).toBe(mem.id);
-    expect(retrieved!.summary).toBe(mem.summary);
-    expect(retrieved!.content).toBe(mem.content);
-    expect(retrieved!.type).toBe(mem.type);
+    expect(retrieved?.id).toBe(mem.id);
+    expect(retrieved?.summary).toBe(mem.summary);
+    expect(retrieved?.content).toBe(mem.content);
+    expect(retrieved?.type).toBe(mem.type);
   });
 
   it("deleteMemory → getMemory returns null", () => {
@@ -94,24 +93,28 @@ describe("SQLite CRUD", () => {
     upsertMemory(db, mem);
     incrementAccessCount(db, mem.id);
     const updated = getMemory(db, mem.id);
-    expect(updated!.accessCount).toBe(1);
+    expect(updated?.accessCount).toBe(1);
     incrementAccessCount(db, mem.id);
-    expect(getMemory(db, mem.id)!.accessCount).toBe(2);
+    expect(getMemory(db, mem.id)?.accessCount).toBe(2);
   });
 
   it("upsertMemory updates existing record", () => {
     upsertMemory(db, makeMemory({ summary: "original" }));
     upsertMemory(db, makeMemory({ summary: "updated" }));
     const mem = getMemory(db, "test-memory");
-    expect(mem!.summary).toBe("updated");
+    expect(mem?.summary).toBe("updated");
   });
 });
 
 describe("Observations", () => {
   let db: Database.Database;
 
-  beforeEach(() => { db = openDatabase(":memory:"); });
-  afterEach(() => { db.close(); });
+  beforeEach(() => {
+    db = openDatabase(":memory:");
+  });
+  afterEach(() => {
+    db.close();
+  });
 
   it("insertObservation → getPendingObservations → markProcessed", () => {
     insertObservation(db, {
@@ -166,7 +169,9 @@ describe("FTS5 keyword search", () => {
     });
   });
 
-  afterEach(() => { db.close(); });
+  afterEach(() => {
+    db.close();
+  });
 
   it("exact word match returns result", () => {
     const results = keywordSearch("TypeScript", db, { limit: 10 });
@@ -254,13 +259,37 @@ describe("Embedder utilities", () => {
 describe("getStats", () => {
   let db: Database.Database;
 
-  beforeEach(() => { db = openDatabase(":memory:"); });
-  afterEach(() => { db.close(); });
+  beforeEach(() => {
+    db = openDatabase(":memory:");
+  });
+  afterEach(() => {
+    db.close();
+  });
 
   it("returns correct counts", () => {
     const now = new Date().toISOString();
-    upsertMemory(db, { id: "m1", type: "user", summary: "s", content: "c", createdAt: now, updatedAt: now, accessCount: 0, lastAccessed: now, embedding: null });
-    upsertMemory(db, { id: "m2", type: "feedback", summary: "s", content: "c", createdAt: now, updatedAt: now, accessCount: 0, lastAccessed: now, embedding: null });
+    upsertMemory(db, {
+      id: "m1",
+      type: "user",
+      summary: "s",
+      content: "c",
+      createdAt: now,
+      updatedAt: now,
+      accessCount: 0,
+      lastAccessed: now,
+      embedding: null,
+    });
+    upsertMemory(db, {
+      id: "m2",
+      type: "feedback",
+      summary: "s",
+      content: "c",
+      createdAt: now,
+      updatedAt: now,
+      accessCount: 0,
+      lastAccessed: now,
+      embedding: null,
+    });
 
     const stats = getStats(db, ":memory:");
     expect(stats.totalMemories).toBe(2);
@@ -272,8 +301,12 @@ describe("getStats", () => {
 describe("shouldConsolidate", () => {
   let db: Database.Database;
 
-  beforeEach(() => { db = openDatabase(":memory:"); });
-  afterEach(() => { db.close(); });
+  beforeEach(() => {
+    db = openDatabase(":memory:");
+  });
+  afterEach(() => {
+    db.close();
+  });
 
   it("returns false when few memories", () => {
     expect(shouldConsolidate(db)).toBe(false);
@@ -301,8 +334,12 @@ describe("shouldConsolidate", () => {
 describe("consolidation_log", () => {
   let db: Database.Database;
 
-  beforeEach(() => { db = openDatabase(":memory:"); });
-  afterEach(() => { db.close(); });
+  beforeEach(() => {
+    db = openDatabase(":memory:");
+  });
+  afterEach(() => {
+    db.close();
+  });
 
   it("countObservationsProcessedSinceConsolidation returns 0 initially", () => {
     expect(countObservationsProcessedSinceConsolidation(db)).toBe(0);

@@ -13,7 +13,12 @@ export {
   upsertMemory,
 } from "./store.js";
 
-export { LocalEmbedder, cosineSimilarity, deserializeEmbedding, serializeEmbedding } from "./embedder.js";
+export {
+  LocalEmbedder,
+  cosineSimilarity,
+  deserializeEmbedding,
+  serializeEmbedding,
+} from "./embedder.js";
 
 export type { SearchOptions, SearchResult } from "./search.js";
 export { hybridSearch, keywordSearch, recentSearch, semanticSearch, typeSearch } from "./search.js";
@@ -29,7 +34,11 @@ export type {
 } from "./hooks.js";
 export { createMemoryHooks, createNoopHooks } from "./hooks.js";
 
-export { bufferObservation, extractFromObservations, processPendingObservations } from "./extract.js";
+export {
+  bufferObservation,
+  extractFromObservations,
+  processPendingObservations,
+} from "./extract.js";
 
 export type { ConsolidateResult } from "./consolidate.js";
 export { autoDream, consolidate, shouldConsolidate } from "./consolidate.js";

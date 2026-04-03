@@ -1,6 +1,6 @@
-import Database from "better-sqlite3";
 import { mkdirSync, statSync } from "node:fs";
 import { dirname } from "node:path";
+import Database from "better-sqlite3";
 
 export interface Memory {
   id: string;
@@ -58,7 +58,9 @@ function runMigrations(db: Database.Database): void {
     );
   `);
 
-  const row = db.prepare("SELECT MAX(version) as v FROM schema_version").get() as { v: number | null };
+  const row = db.prepare("SELECT MAX(version) as v FROM schema_version").get() as {
+    v: number | null;
+  };
   const currentVersion = row?.v ?? 0;
 
   if (currentVersion < 1) {
@@ -157,9 +159,9 @@ export function upsertMemory(db: Database.Database, memory: Memory): void {
 }
 
 export function getMemory(db: Database.Database, id: string): Memory | null {
-  const row = db
-    .prepare("SELECT * FROM memories WHERE id = ?")
-    .get(id) as Record<string, unknown> | undefined;
+  const row = db.prepare("SELECT * FROM memories WHERE id = ?").get(id) as
+    | Record<string, unknown>
+    | undefined;
   return row ? rowToMemory(row) : null;
 }
 
@@ -168,20 +170,15 @@ export function deleteMemory(db: Database.Database, id: string): void {
   db.prepare("DELETE FROM memories_fts WHERE id = ?").run(id);
 }
 
-export function listMemories(
-  db: Database.Database,
-  type?: string,
-  limit = 100,
-): Memory[] {
+export function listMemories(db: Database.Database, type?: string, limit = 100): Memory[] {
   const rows = type
     ? (db
-        .prepare(
-          "SELECT * FROM memories WHERE type = ? ORDER BY updated_at DESC LIMIT ?",
-        )
+        .prepare("SELECT * FROM memories WHERE type = ? ORDER BY updated_at DESC LIMIT ?")
         .all(type, limit) as Record<string, unknown>[])
-    : (db
-        .prepare("SELECT * FROM memories ORDER BY updated_at DESC LIMIT ?")
-        .all(limit) as Record<string, unknown>[]);
+    : (db.prepare("SELECT * FROM memories ORDER BY updated_at DESC LIMIT ?").all(limit) as Record<
+        string,
+        unknown
+      >[]);
   return rows.map(rowToMemory);
 }
 
@@ -198,14 +195,9 @@ export function insertObservation(db: Database.Database, obs: Omit<Observation, 
   `).run(obs.sessionId, obs.hook, obs.data, obs.createdAt);
 }
 
-export function getPendingObservations(
-  db: Database.Database,
-  limit = 50,
-): Observation[] {
+export function getPendingObservations(db: Database.Database, limit = 50): Observation[] {
   return db
-    .prepare(
-      "SELECT * FROM observations WHERE processed = 0 ORDER BY id ASC LIMIT ?",
-    )
+    .prepare("SELECT * FROM observations WHERE processed = 0 ORDER BY id ASC LIMIT ?")
     .all(limit) as Observation[];
 }
 
@@ -233,9 +225,9 @@ export function upsertSession(db: Database.Database, session: SessionRecord): vo
 }
 
 export function getSession(db: Database.Database, id: string): SessionRecord | null {
-  const row = db
-    .prepare("SELECT * FROM sessions WHERE id = ?")
-    .get(id) as Record<string, unknown> | undefined;
+  const row = db.prepare("SELECT * FROM sessions WHERE id = ?").get(id) as
+    | Record<string, unknown>
+    | undefined;
   return row ? rowToSession(row) : null;
 }
 
@@ -260,9 +252,7 @@ export function logHook(
 }
 
 export function getStats(db: Database.Database, dbPath: string): MemoryStats {
-  const totalMemories = (
-    db.prepare("SELECT COUNT(*) as c FROM memories").get() as { c: number }
-  ).c;
+  const totalMemories = (db.prepare("SELECT COUNT(*) as c FROM memories").get() as { c: number }).c;
 
   const typeRows = db
     .prepare("SELECT type, COUNT(*) as c FROM memories GROUP BY type")
@@ -270,9 +260,7 @@ export function getStats(db: Database.Database, dbPath: string): MemoryStats {
   const byType: Record<string, number> = {};
   for (const r of typeRows) byType[r.type] = r.c;
 
-  const totalSessions = (
-    db.prepare("SELECT COUNT(*) as c FROM sessions").get() as { c: number }
-  ).c;
+  const totalSessions = (db.prepare("SELECT COUNT(*) as c FROM sessions").get() as { c: number }).c;
 
   let dbSizeBytes = 0;
   try {
@@ -307,22 +295,24 @@ export function logConsolidation(
 }
 
 export function getLastConsolidationTime(db: Database.Database): string | null {
-  const row = db
-    .prepare("SELECT MAX(ran_at) as t FROM consolidation_log")
-    .get() as { t: string | null };
+  const row = db.prepare("SELECT MAX(ran_at) as t FROM consolidation_log").get() as {
+    t: string | null;
+  };
   return row?.t ?? null;
 }
 
 export function countObservationsProcessedSinceConsolidation(db: Database.Database): number {
   const lastTime = getLastConsolidationTime(db);
   if (!lastTime) {
-    return (db.prepare("SELECT COUNT(*) as c FROM observations WHERE processed = 1").get() as { c: number }).c;
+    return (
+      db.prepare("SELECT COUNT(*) as c FROM observations WHERE processed = 1").get() as {
+        c: number;
+      }
+    ).c;
   }
   return (
     db
-      .prepare(
-        "SELECT COUNT(*) as c FROM observations WHERE processed = 1 AND created_at > ?",
-      )
+      .prepare("SELECT COUNT(*) as c FROM observations WHERE processed = 1 AND created_at > ?")
       .get(lastTime) as { c: number }
   ).c;
 }

@@ -1,10 +1,10 @@
+import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 /**
  * Memory worker HTTP sidecar — runs on port 37899.
  * Can be spawned as a separate process or run in-process.
  */
 import { createServer } from "node:http";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 import { LocalEmbedder } from "./embedder.js";
@@ -66,8 +66,14 @@ export async function startWorker(cwd?: string): Promise<void> {
     } catch {}
   }
 
-  process.on("SIGTERM", () => { cleanup(); process.exit(0); });
-  process.on("SIGINT", () => { cleanup(); process.exit(0); });
+  process.on("SIGTERM", () => {
+    cleanup();
+    process.exit(0);
+  });
+  process.on("SIGINT", () => {
+    cleanup();
+    process.exit(0);
+  });
 
   const server = createServer(async (req: IncomingMessage, res: ServerResponse) => {
     lastRequestTime = Date.now();
@@ -132,7 +138,7 @@ export async function startWorker(cwd?: string): Promise<void> {
       // GET /api/search
       if (req.method === "GET" && path === "/api/search") {
         const q = url.searchParams.get("q") ?? "";
-        const limit = parseInt(url.searchParams.get("limit") ?? "10");
+        const limit = Number.parseInt(url.searchParams.get("limit") ?? "10");
         const typeParam = url.searchParams.get("type");
         const searchOpts = typeParam ? { limit, type: typeParam } : { limit };
         const results = await hybridSearch(q, db, embedder, searchOpts);
@@ -143,7 +149,7 @@ export async function startWorker(cwd?: string): Promise<void> {
       // GET /api/search/semantic
       if (req.method === "GET" && path === "/api/search/semantic") {
         const q = url.searchParams.get("q") ?? "";
-        const limit = parseInt(url.searchParams.get("limit") ?? "10");
+        const limit = Number.parseInt(url.searchParams.get("limit") ?? "10");
         const results = await semanticSearch(q, db, embedder, { limit });
         sendJson(res, 200, results);
         return;
@@ -152,7 +158,7 @@ export async function startWorker(cwd?: string): Promise<void> {
       // GET /api/search/keyword
       if (req.method === "GET" && path === "/api/search/keyword") {
         const q = url.searchParams.get("q") ?? "";
-        const limit = parseInt(url.searchParams.get("limit") ?? "10");
+        const limit = Number.parseInt(url.searchParams.get("limit") ?? "10");
         const results = keywordSearch(q, db, { limit });
         sendJson(res, 200, results);
         return;
@@ -184,7 +190,7 @@ export async function startWorker(cwd?: string): Promise<void> {
       // GET /api/memories
       if (req.method === "GET" && path === "/api/memories") {
         const type = url.searchParams.get("type") ?? undefined;
-        const limit = parseInt(url.searchParams.get("limit") ?? "100");
+        const limit = Number.parseInt(url.searchParams.get("limit") ?? "100");
         const memories = listMemories(db, type, limit);
         sendJson(res, 200, memories);
         return;
@@ -225,7 +231,10 @@ export async function startWorker(cwd?: string): Promise<void> {
       // POST /api/shutdown
       if (req.method === "POST" && path === "/api/shutdown") {
         sendJson(res, 200, { ok: true });
-        setTimeout(() => { cleanup(); process.exit(0); }, 100);
+        setTimeout(() => {
+          cleanup();
+          process.exit(0);
+        }, 100);
         return;
       }
 
@@ -262,7 +271,9 @@ export async function startWorker(cwd?: string): Promise<void> {
 function readBody(req: IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
     let body = "";
-    req.on("data", (chunk) => { body += chunk; });
+    req.on("data", (chunk) => {
+      body += chunk;
+    });
     req.on("end", () => resolve(body));
     req.on("error", reject);
   });
@@ -299,7 +310,11 @@ export class MemoryWorkerClientImpl {
     try {
       const res = await fetch(`${this.baseUrl}/api/search?q=${encodeURIComponent(query)}&limit=20`);
       if (!res.ok) return "";
-      const results = (await res.json()) as Array<{ type: string; summary: string; content: string }>;
+      const results = (await res.json()) as Array<{
+        type: string;
+        summary: string;
+        content: string;
+      }>;
       if (results.length === 0) return "";
 
       const charBudget = tokenBudget * 4;

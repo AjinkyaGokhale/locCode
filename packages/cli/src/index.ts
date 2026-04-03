@@ -130,7 +130,7 @@ async function main(): Promise<void> {
     const client = createClient(agentConfig);
     const policy = createPermissionPolicy(agentConfig.permissionMode);
 
-    let totalIn  = 0;
+    let totalIn = 0;
     let totalOut = 0;
     const writer = new render.BoxStreamWriter();
     let streaming = false;
@@ -145,26 +145,42 @@ async function main(): Promise<void> {
           writer.write(event.content);
           break;
         case "tool_call_start":
-          if (streaming) { writer.flush(); process.stdout.write(render.renderAssistantBoxEnd(0, 0)); streaming = false; }
-          process.stdout.write(`  ${render.GRAY}▸${render.R}  ${render.CYAN}${event.name}${render.R}\n`);
+          if (streaming) {
+            writer.flush();
+            process.stdout.write(render.renderAssistantBoxEnd(0, 0));
+            streaming = false;
+          }
+          process.stdout.write(
+            `  ${render.GRAY}▸${render.R}  ${render.CYAN}${event.name}${render.R}\n`,
+          );
           break;
         case "tool_result":
           process.stdout.write(render.renderToolResult(event.name, event.output, event.isError));
           break;
         case "usage":
-          totalIn  += event.inputTokens;
+          totalIn += event.inputTokens;
           totalOut += event.outputTokens;
           break;
         case "guardrail_triggered":
-          if (streaming) { writer.flush(); streaming = false; }
+          if (streaming) {
+            writer.flush();
+            streaming = false;
+          }
           process.stdout.write(render.renderGuardrail(event.reason));
           break;
         case "turn_complete":
-          if (streaming) { writer.flush(); process.stdout.write(render.renderAssistantBoxEnd(totalIn, totalOut)); streaming = false; }
-          else if (totalIn > 0 || totalOut > 0) process.stdout.write(render.renderUsage(totalIn, totalOut));
+          if (streaming) {
+            writer.flush();
+            process.stdout.write(render.renderAssistantBoxEnd(totalIn, totalOut));
+            streaming = false;
+          } else if (totalIn > 0 || totalOut > 0)
+            process.stdout.write(render.renderUsage(totalIn, totalOut));
           break;
         case "error":
-          if (streaming) { writer.flush(); streaming = false; }
+          if (streaming) {
+            writer.flush();
+            streaming = false;
+          }
           process.stderr.write(render.renderError(event.message));
           break;
       }

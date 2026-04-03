@@ -203,7 +203,7 @@ describe("runTurn — maxIterations", () => {
       (e): e is Extract<AgentEvent, { type: "turn_complete" }> => e.type === "turn_complete",
     );
     expect(complete).toBeDefined();
-    expect(complete!.iterations).toBeLessThanOrEqual(3);
+    expect(complete?.iterations).toBeLessThanOrEqual(3);
   });
 });
 

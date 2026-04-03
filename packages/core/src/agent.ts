@@ -75,7 +75,11 @@ export async function* runTurn(
   permissionPolicy: PermissionPolicy,
   hooks: LifecycleHooks = createNoopHooks(),
 ): AsyncGenerator<AgentEvent> {
-  hooks.onUserPromptSubmit({ userMessage: userInput, sessionId: session.id, timestamp: new Date().toISOString() });
+  hooks.onUserPromptSubmit({
+    userMessage: userInput,
+    sessionId: session.id,
+    timestamp: new Date().toISOString(),
+  });
   session.appendUser(userInput);
 
   const apiTools = TOOL_DEFINITIONS.map(toOpenAITool) as ChatCompletionTool[];

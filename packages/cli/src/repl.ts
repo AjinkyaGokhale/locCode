@@ -28,16 +28,15 @@ async function runAgentTurn(input: string, state: ReplState): Promise<void> {
 
   spinner.start("thinking");
 
-  let streaming  = false;   // are we currently inside an assistant box?
-  let totalIn    = 0;
-  let totalOut   = 0;
-  const toolT    = new Map<string, number>(); // tool id → start ms
-  const writer   = new render.BoxStreamWriter();
+  let streaming = false; // are we currently inside an assistant box?
+  let totalIn = 0;
+  let totalOut = 0;
+  const toolT = new Map<string, number>(); // tool id → start ms
+  const writer = new render.BoxStreamWriter();
 
   try {
     for await (const ev of runTurn(client, state.session, input, state.config, policy)) {
       switch (ev.type) {
-
         case "text_delta": {
           if (!streaming) {
             spinner.stop();
@@ -58,7 +57,9 @@ async function runAgentTurn(input: string, state: ReplState): Promise<void> {
           }
           toolT.set(ev.id, Date.now());
           // Placeholder line — will be overwritten on tool_result
-          process.stdout.write(`  ${render.ORANGE}⚡${render.R} ${render.CYAN}${ev.name}${render.R} ${render.DARK_GRAY}…${render.R}\n`);
+          process.stdout.write(
+            `  ${render.ORANGE}⚡${render.R} ${render.CYAN}${ev.name}${render.R} ${render.DARK_GRAY}…${render.R}\n`,
+          );
           spinner.start(ev.name);
           break;
         }
@@ -75,12 +76,15 @@ async function runAgentTurn(input: string, state: ReplState): Promise<void> {
         }
 
         case "usage":
-          totalIn  += ev.inputTokens;
+          totalIn += ev.inputTokens;
           totalOut += ev.outputTokens;
           break;
 
         case "guardrail_triggered":
-          if (streaming) { writer.flush(); streaming = false; }
+          if (streaming) {
+            writer.flush();
+            streaming = false;
+          }
           spinner.stop();
           process.stdout.write(render.renderGuardrail(ev.reason));
           break;
@@ -98,14 +102,20 @@ async function runAgentTurn(input: string, state: ReplState): Promise<void> {
 
         case "error":
           spinner.stop();
-          if (streaming) { writer.flush(); streaming = false; }
+          if (streaming) {
+            writer.flush();
+            streaming = false;
+          }
           process.stdout.write(render.renderError(ev.message));
           break;
       }
     }
   } catch (err) {
     spinner.stop();
-    if (streaming) { writer.flush(); streaming = false; }
+    if (streaming) {
+      writer.flush();
+      streaming = false;
+    }
     process.stdout.write(render.renderError(err instanceof Error ? err.message : String(err)));
   }
 }
@@ -125,14 +135,16 @@ async function handleCommand(
       break;
 
     case "status":
-      process.stdout.write(render.renderStatus({
-        Session:    state.session.id,
-        Model:      state.config.model,
-        Server:     state.config.baseUrl,
-        Permission: state.permissionMode,
-        Messages:   String(state.session.messages.length),
-        "~Tokens":  estimateTokens(state.session).toLocaleString(),
-      }));
+      process.stdout.write(
+        render.renderStatus({
+          Session: state.session.id,
+          Model: state.config.model,
+          Server: state.config.baseUrl,
+          Permission: state.permissionMode,
+          Messages: String(state.session.messages.length),
+          "~Tokens": estimateTokens(state.session).toLocaleString(),
+        }),
+      );
       break;
 
     case "compact": {
@@ -140,7 +152,9 @@ async function handleCommand(
       spinner.start("compacting…");
       await compactSession(createClient(state.config), state.session, state.config);
       spinner.stop();
-      process.stdout.write(render.renderSuccess(`Compacted: ${before} → ${state.session.messages.length} messages`));
+      process.stdout.write(
+        render.renderSuccess(`Compacted: ${before} → ${state.session.messages.length} messages`),
+      );
       break;
     }
 
@@ -150,17 +164,25 @@ async function handleCommand(
       break;
 
     case "save": {
-      const path = args[0] ?? resolve(process.cwd(), ".loccode", "sessions", `${state.session.id}.json`);
+      const path =
+        args[0] ?? resolve(process.cwd(), ".loccode", "sessions", `${state.session.id}.json`);
       mkdirSync(dirname(path), { recursive: true });
       process.stdout.write(render.renderSuccess(`Saved → ${state.session.save(dirname(path))}`));
       break;
     }
 
     case "load":
-      if (!args[0]) { process.stdout.write(render.renderError("Usage: /load <path>")); break; }
+      if (!args[0]) {
+        process.stdout.write(render.renderError("Usage: /load <path>"));
+        break;
+      }
       try {
         state.session = Session.load(args[0]);
-        process.stdout.write(render.renderSuccess(`Loaded ${state.session.id} (${state.session.messages.length} msgs)`));
+        process.stdout.write(
+          render.renderSuccess(
+            `Loaded ${state.session.id} (${state.session.messages.length} msgs)`,
+          ),
+        );
       } catch {
         process.stdout.write(render.renderError(`Cannot load: ${args[0]}`));
       }
@@ -182,7 +204,10 @@ async function handleCommand(
     }
 
     case "model":
-      if (!args[0]) { process.stdout.write(render.renderError("Usage: /model <name>")); break; }
+      if (!args[0]) {
+        process.stdout.write(render.renderError("Usage: /model <name>"));
+        break;
+      }
       state.config = { ...state.config, model: args[0] };
       process.stdout.write(render.renderSuccess(`Model → ${args[0]}`));
       break;
@@ -214,12 +239,12 @@ export async function startRepl(config: AgentConfig): Promise<void> {
   };
 
   const rl = createInterface({
-    input:       process.stdin,
-    output:      process.stdout,
-    prompt:      render.PROMPT_STR,
+    input: process.stdin,
+    output: process.stdout,
+    prompt: render.PROMPT_STR,
     historySize: 500,
     // @ts-expect-error — not in types but works in Node ≥18
-    crlfDelay:   Infinity,
+    crlfDelay: Number.POSITIVE_INFINITY,
   });
 
   // Patch stdout to prevent readline's clearScreenDown from erasing the bottom frame.
@@ -233,10 +258,10 @@ export async function startRepl(config: AgentConfig): Promise<void> {
     _origWrite = orig;
     // @ts-expect-error — intentional monkey-patch
     process.stdout.write = (chunk: unknown, ...rest: unknown[]) => {
-      if (typeof chunk === "string") {
-        chunk = chunk.replace(/\x1B\[0?J/g, "\x1B[2K\r");
-      }
-      return (orig as Function)(chunk, ...rest);
+      // Replace clearScreenDown (ESC[J / ESC[0J) with clear-line-only to preserve bottom frame
+      const clearScreenDown = new RegExp(`${"\x1B"}\\[0?J`, "g");
+      const out = typeof chunk === "string" ? chunk.replace(clearScreenDown, "\x1B[2K\r") : chunk;
+      return (orig as (c: unknown, ...r: unknown[]) => boolean)(out, ...rest);
     };
   }
 
@@ -253,7 +278,7 @@ export async function startRepl(config: AgentConfig): Promise<void> {
     unpatchStdout();
     process.stdout.write(render.renderInputTop());
     // Draw bottom line + patience below the (blank) input line, then cursor-up back to it
-    process.stdout.write("\n" + render.renderInputBottom() + "\x1B[2A\r");
+    process.stdout.write(`\n${render.renderInputBottom()}\x1B[2A\r`);
     patchStdout();
     rl.prompt();
   }
@@ -276,7 +301,10 @@ export async function startRepl(config: AgentConfig): Promise<void> {
   for await (const line of rl) {
     unpatchStdout();
     const trimmed = line.trim();
-    if (!trimmed) { doPrompt(); continue; }
+    if (!trimmed) {
+      doPrompt();
+      continue;
+    }
 
     // Show the user's message as a styled bubble
     process.stdout.write(render.renderUserBubble(trimmed));
